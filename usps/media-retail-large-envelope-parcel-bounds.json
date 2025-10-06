@@ -1,0 +1,10 @@
+[
+    {
+        "type": "outputs",
+        "variables": ["fee_nl", "fee_bl"]
+    },
+    {
+        "type": "equals",
+        "variables": ["w", "weight"]
+    }
+]
