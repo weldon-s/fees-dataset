@@ -2,6 +2,6 @@
     {
         "type": "mapping",
         "functions": ["fee_bl", "fee_nl"],
-        "inputs": "inputs"
+        "mapping": [["max", "max"], ["weight", "weigh"], ["max", "extra"]]
     }
 ]

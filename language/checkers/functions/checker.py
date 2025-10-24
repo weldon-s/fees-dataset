@@ -12,7 +12,6 @@ class FunctionBounds(typing.TypedDict):
     type: typing.Literal["strict", "mapping"]
     functions: list[str]
     mapping: list[list[str]]
-    inputs: str
 
 
 @dataclass
@@ -65,14 +64,17 @@ def parse_functions(file: str) -> dict[str, ParamFunction]:
 def extract_assertions(
     bounds: list[FunctionBounds], functions: dict[str, ParamFunction]
 ):
+    """
+    Extract assertions from provided bound objects
+    """
     bound_assumptions = []
     output_assertions = []
     input_arrays = []
-    for bound in bounds:
+    for bound_index, bound in enumerate(bounds):
         if len(bound["functions"]) < 2:
             raise AssertionError("Must assert equivalence between at least 2 functions")
 
-        xs = Array(bound["inputs"], IntSort(), RealSort())
+        xs = Array(f"inputs-{bound_index}", IntSort(), RealSort())
 
         if bound["type"] == "strict":
             f_0 = functions[bound["functions"][0]].decl
@@ -97,7 +99,7 @@ def extract_assertions(
             mapped_functions = [functions[f] for f in bound["functions"]]
             start_indices = [0]
 
-            for function in mapped_functions[1:]:
+            for function in mapped_functions[:-1]:
                 start_indices.append(start_indices[-1] + function.decl.arity())
 
             for param_mapping in bound["mapping"]:

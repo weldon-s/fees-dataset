@@ -2,7 +2,6 @@
     {
         "type": "mapping",
         "functions": ["fee_bl", "fee_nl"],
-        "mapping": [["income", "income"]],
-        "inputs": "inputs"
+        "mapping": [["income", "income"]]
     }
 ]

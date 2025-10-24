@@ -1,7 +1,6 @@
 [
     {
         "type": "strict",
-        "functions": ["fee_bl", "fee_nl"],
-        "inputs": "inputs"
+        "functions": ["fee_bl", "fee_nl"]
     }
 ]

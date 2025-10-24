@@ -1,7 +1,7 @@
 (set-logic QF_LIRA)
 
 (declare-fun fee_nl (Real Real Real) Real)
-(assert (forall ((weigh Real) (max Real) (extra Real)) 
+(assert (forall ((max Real) (weigh Real) (extra Real)) 
 ( = (fee_nl max weigh extra)
 (ite (<= weigh 1)
       4.47
