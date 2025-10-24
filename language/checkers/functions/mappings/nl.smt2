@@ -1,4 +1,4 @@
-(set-logic QF_NRA)
+(set-logic QF_LIRA)
 
 ; Define a function fee_nl that computes the total tax owed based on taxable income
 (declare-fun fee_nl (Real) Real)
@@ -41,5 +41,3 @@
     )
   )
 )
-
-(check-sat)

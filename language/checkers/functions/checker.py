@@ -22,17 +22,25 @@ class ParamFunction:
 
 
 @dataclass
+class Input:
+    array: ArrayRef
+    functions: list[ParamFunction]
+
+
+@dataclass
 class AssertionData:
     bound_assumptions: BoolRef = And()
     output_assertions: BoolRef = And()
     # keep track of the number of elements we reference in a given input array
-    input_arrays: list[tuple[ArrayRef, int]] = field(default_factory=[])
+    input_arrays: list[Input] = field(default_factory=[])
 
 
 def parse_functions(file: str) -> dict[str, ParamFunction]:
     functions: dict[str, ParamFunction] = {}
     ast = parse_smt2_file(file)
 
+    # assume all assertions are of the form
+    # assert <quantified variables> (= function <variables>) (<function body>)
     for expr in ast:
         if is_quantifier(expr):
             num_vars = expr.num_vars()
@@ -70,16 +78,18 @@ def extract_assertions(
                 assert f_0.arity() == f_i.arity(), "Functions must have same arity"
                 output_assertions.append(
                     f_0(*[xs[j] for j in range(f_0.arity())])
-                    == f_i(*[xs[j] for j in range(f_i.arity())]),
+                    == f_i(*[xs[f_0.arity() + j] for j in range(f_i.arity())]),
                 )
 
-                input_arrays.append((xs, f_0.arity()))
+                input_arrays.append((xs, 2 * f_0.arity()))
 
             elif bound["type"] == "mapping":
                 mapped_functions = [functions[f] for f in bound["functions"]]
-                index_mappings: list[list[int]] = [
-                    list(range(f.decl.arity())) for f in mapped_functions
-                ]
+                start_indices = [0]
+
+                for function in mapped_functions[1:]:
+                    start_indices.append(start_indices[-1] + function.decl.arity())
+
                 for param_mapping in bound["mapping"]:
                     assert len(param_mapping) == len(mapped_functions)
 
@@ -93,19 +103,21 @@ def extract_assertions(
                         current_param_index = mapped_functions[i].params.index(
                             param_mapping[i]
                         )
-                        index_mappings[i][current_param_index] = original_param_index
+                        bound_assumptions.append(
+                            xs[original_param_index]
+                            == xs[start_indices[i] + current_param_index]
+                        )
 
-                xs = Array(bound["inputs"], IntSort(), RealSort())
                 f_0 = mapped_functions[0].decl
 
-                for f_i, mapping in zip(mapped_functions[1:], index_mappings[1:]):
-                    f_i = f_i.decl
+                for i in range(1, len(mapped_functions)):
+                    f_i = mapped_functions[i].decl
                     output_assertions.append(
                         f_0(*[xs[j] for j in range(f_0.arity())])
-                        == f_i(*[xs[mapping[j]] for j in range(f_i.arity())])
+                        == f_i(*[xs[start_indices[i] + j] for j in range(f_i.arity())])
                     )
 
-                input_arrays.append((xs, max(f.decl.arity() for f in mapped_functions)))
+                input_arrays.append((xs, sum(f.decl.arity() for f in mapped_functions)))
 
             else:
                 raise AssertionError(f"Unknown bound type {bound['type']}")
