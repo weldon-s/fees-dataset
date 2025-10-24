@@ -28,6 +28,12 @@ class Input:
 
 
 @dataclass
+class Input:
+    decl: FuncDeclRef
+    parameters: list[ArrayRef]
+
+
+@dataclass
 class AssertionData:
     bound_assumptions: BoolRef = And()
     output_assertions: BoolRef = And()
@@ -117,7 +123,16 @@ def extract_assertions(
                         == f_i(*[xs[start_indices[i] + j] for j in range(f_i.arity())])
                     )
 
-                input_arrays.append((xs, sum(f.decl.arity() for f in mapped_functions)))
+                for i in range(len(mapped_functions)):
+                    input_arrays.append(
+                        Input(
+                            decl=mapped_functions[i].decl,
+                            parameters=[
+                                xs[start_indices[i] + j]
+                                for j in range(mapped_functions[i].decl.arity())
+                            ],
+                        )
+                    )
 
             else:
                 raise AssertionError(f"Unknown bound type {bound['type']}")
@@ -154,29 +169,22 @@ def check_equivalence(file1: str, file2: str, bounds_file: str | None = None):
     s.add(assertion_data.bound_assumptions)
     s.add(Not(assertion_data.output_assertions))
 
-    conditions = []
-    counterexample = None
-    while s.check() == sat and len(conditions) < MAX_CONDITIONS:
-        model = s.model()
-        for ary, length in assertion_data.input_arrays:
-            condition = And(*[ary[i] != model.evaluate(ary[i]) for i in range(length)])
-            s.add(condition)
-            conditions.append(condition)
-
-            if counterexample is None:
-                counterexample = f"{ary.decl().name()}: {[model.evaluate(ary[i]) for i in range(length)]}"
-
     if s.check() == unsat:
-        print(
-            "✔️  The two SMT formulas are logically equivalent, modulo the following conditions:"
-        )
+        print("✔️  The two SMT formulas are logically equivalent")
 
-        for condition in conditions:
-            print(condition)
     else:
         print("❌  The two SMT formulas are NOT equivalent.")
         print("Counterexample:")
-        print(counterexample)
+        model = s.model()
+
+        strings = []
+
+        for input_array in assertion_data.input_arrays:
+            strings.append(
+                f"{input_array.decl.name()}({', '.join(str(model.evaluate(input_array.parameters[i])) for i in range(input_array.decl.arity()))})"
+            )
+
+        print(*strings, sep=", ")
 
 
 if __name__ == "__main__":
