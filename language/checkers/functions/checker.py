@@ -38,7 +38,7 @@ class AssertionData:
     bound_assumptions: BoolRef = And()
     output_assertions: BoolRef = And()
     # keep track of the number of elements we reference in a given input array
-    input_arrays: list[Input] = field(default_factory=[])
+    input_arrays: list[Input] = field(default_factory=list)
 
 
 def parse_functions(file: str) -> dict[str, ParamFunction]:
@@ -72,70 +72,74 @@ def extract_assertions(
         if len(bound["functions"]) < 2:
             raise AssertionError("Must assert equivalence between at least 2 functions")
 
-        # this doesn't assume that there are only 2 functions to compare
-        f_0 = functions[bound["functions"][0]].decl
+        xs = Array(bound["inputs"], IntSort(), RealSort())
 
-        for i in range(1, len(bound["functions"])):
-            f_i = functions[bound["functions"][i]].decl
-
-            xs = Array(bound["inputs"], IntSort(), RealSort())
-
-            if bound["type"] == "strict":
+        if bound["type"] == "strict":
+            f_0 = functions[bound["functions"][0]].decl
+            for i in range(1, len(bound["functions"])):
+                f_i = functions[bound["functions"][i]].decl
                 assert f_0.arity() == f_i.arity(), "Functions must have same arity"
                 output_assertions.append(
                     f_0(*[xs[j] for j in range(f_0.arity())])
-                    == f_i(*[xs[f_0.arity() + j] for j in range(f_i.arity())]),
+                    == f_i(*[xs[j] for j in range(f_i.arity())]),
                 )
 
-                input_arrays.append((xs, 2 * f_0.arity()))
-
-            elif bound["type"] == "mapping":
-                mapped_functions = [functions[f] for f in bound["functions"]]
-                start_indices = [0]
-
-                for function in mapped_functions[1:]:
-                    start_indices.append(start_indices[-1] + function.decl.arity())
-
-                for param_mapping in bound["mapping"]:
-                    assert len(param_mapping) == len(mapped_functions)
-
-                    # find position in the first function's params list to map to
-                    original_param_index = mapped_functions[0].params.index(
-                        param_mapping[0]
-                    )
-
-                    for i in range(1, len(param_mapping)):
-                        # find position in the current function's param list to map to
-                        current_param_index = mapped_functions[i].params.index(
-                            param_mapping[i]
-                        )
-                        bound_assumptions.append(
-                            xs[original_param_index]
-                            == xs[start_indices[i] + current_param_index]
-                        )
-
-                f_0 = mapped_functions[0].decl
-
-                for i in range(1, len(mapped_functions)):
-                    f_i = mapped_functions[i].decl
-                    output_assertions.append(
-                        f_0(*[xs[j] for j in range(f_0.arity())])
-                        == f_i(*[xs[start_indices[i] + j] for j in range(f_i.arity())])
-                    )
-
-                for i in range(len(mapped_functions)):
+                for i in range(len(bound["functions"])):
+                    function = functions[bound["functions"][i]]
                     input_arrays.append(
                         Input(
-                            decl=mapped_functions[i].decl,
-                            parameters=[
-                                xs[start_indices[i] + j]
-                                for j in range(mapped_functions[i].decl.arity())
-                            ],
+                            decl=function.decl,
+                            parameters=[xs[j] for j in range(function.decl.arity())],
                         )
                     )
 
-            else:
-                raise AssertionError(f"Unknown bound type {bound['type']}")
+        elif bound["type"] == "mapping":
+            mapped_functions = [functions[f] for f in bound["functions"]]
+            start_indices = [0]
+
+            for function in mapped_functions[1:]:
+                start_indices.append(start_indices[-1] + function.decl.arity())
+
+            for param_mapping in bound["mapping"]:
+                assert len(param_mapping) == len(mapped_functions)
+
+                # find position in the first function's params list to map to
+                original_param_index = mapped_functions[0].params.index(
+                    param_mapping[0]
+                )
+
+                for i in range(1, len(param_mapping)):
+                    # find position in the current function's param list to map to
+                    current_param_index = mapped_functions[i].params.index(
+                        param_mapping[i]
+                    )
+                    bound_assumptions.append(
+                        xs[original_param_index]
+                        == xs[start_indices[i] + current_param_index]
+                    )
+
+            f_0 = mapped_functions[0].decl
+
+            for i in range(1, len(mapped_functions)):
+                f_i = mapped_functions[i].decl
+                output_assertions.append(
+                    f_0(*[xs[j] for j in range(f_0.arity())])
+                    == f_i(*[xs[start_indices[i] + j] for j in range(f_i.arity())])
+                )
+
+            for i in range(len(mapped_functions)):
+                input_arrays.append(
+                    Input(
+                        decl=mapped_functions[i].decl,
+                        parameters=[
+                            xs[start_indices[i] + j]
+                            for j in range(mapped_functions[i].decl.arity())
+                        ],
+                    )
+                )
+
+        else:
+            raise AssertionError(f"Unknown bound type {bound['type']}")
 
     return AssertionData(
         bound_assumptions=And(bound_assumptions),
@@ -180,9 +184,20 @@ def check_equivalence(file1: str, file2: str, bounds_file: str | None = None):
         strings = []
 
         for input_array in assertion_data.input_arrays:
-            strings.append(
-                f"{input_array.decl.name()}({', '.join(str(model.evaluate(input_array.parameters[i])) for i in range(input_array.decl.arity()))})"
-            )
+            lhs = f"""{input_array.decl.name()}({', '.join(
+                str(model.evaluate(input_array.parameters[i])) for i in range(input_array.decl.arity())
+                )})"""
+
+            rhs = model.evaluate(
+                input_array.decl(
+                    *[
+                        input_array.parameters[i]
+                        for i in range(input_array.decl.arity())
+                    ]
+                )
+            ).as_decimal(2)
+
+            strings.append(f"{lhs} = {rhs}")
 
         print(*strings, sep=", ")
 
